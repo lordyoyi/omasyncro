@@ -1,0 +1,9 @@
+[Unit]
+Description=omasync: message from another Omarchy machine
+
+[Service]
+ExecStart=%h/.local/bin/omasync serve
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+TimeoutStopSec=300

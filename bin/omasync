@@ -1,0 +1,172 @@
+#!/bin/bash
+#
+# omasync: keep every Omarchy machine on your tailnet with the same themes,
+# wallpapers and active theme.
+#
+#   omasync setup [<data-repo-url>]   set up this machine (install.sh runs it)
+#   omasync status                    library, active theme and peers
+#   omasync sync [--update]           sync the library now (--update: git pull every theme)
+#   omasync remove <theme>            uninstall a theme on every machine
+#   omasync remove-bg <theme>/<file>  delete a wallpaper on every machine
+#
+# Internal, run by systemd: tick, changed, serve.
+
+set -uo pipefail
+
+LIB="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../lib" && pwd)"
+source "$LIB/common.sh"
+source "$LIB/library.sh"
+source "$LIB/active.sh"
+source "$LIB/peers.sh"
+
+UNITS=(omasync.socket omasync@.service omasync-active.path omasync-active.service omasync.timer omasync.service)
+DATA_REPO_NAME=omasync-data
+
+# Without a URL: reuse <you>/omasync-data on GitHub, creating it if needed.
+github_data_repo() {
+  command -v gh >/dev/null && gh auth status &>/dev/null || return 1
+  gh repo view "$DATA_REPO_NAME" --json url -q .url 2>/dev/null && return 0
+  gh repo create "$DATA_REPO_NAME" --private \
+    --description "Omarchy themes and wallpapers, synced by omasync" >/dev/null || return 1
+  gh repo view "$DATA_REPO_NAME" --json url -q .url
+}
+
+clone_data() {
+  mkdir -p "$(dirname "$DATA")"
+  git clone -q -- "$1" "$DATA" 2> >(grep -v 'empty repository' >&2) || die "could not clone $1"
+  git_data rev-parse -q --verify HEAD >/dev/null && return 0
+  # A brand-new data repo: lay it out.
+  mkdir -p "$DATA/backgrounds"
+  touch "$DATA/themes.txt" "$DATA/removed.txt" "$DATA/backgrounds/.keep"
+  printf 'themes.txt merge=union\nremoved.txt merge=union\n' >"$DATA/.gitattributes"
+  printf '# Omarchy library\n\nData for [omasync](https://github.com/lordyoyi/omasync). Edited by the tool; no need to touch it by hand.\n' >"$DATA/README.md"
+  git_data checkout -q -b main 2>/dev/null
+  set_identity
+  git_data add -A && git_data commit -q -m "Start the library" && git_data push -q -u origin main ||
+    die "could not push to $1"
+}
+
+# Commits need an author. Use the global git identity, else the GitHub
+# account, else something recognisable.
+set_identity() {
+  git_data config user.email >/dev/null && return 0
+  local login id
+  if command -v gh >/dev/null && login=$(gh api user -q .login 2>/dev/null); then
+    id=$(gh api user -q .id)
+    git_data config user.name "$(gh api user -q '.name // .login')"
+    git_data config user.email "$id+$login@users.noreply.github.com"
+  else
+    git_data config user.name "omasync"
+    git_data config user.email "omasync@$NAME"
+  fi
+}
+
+link_units() {
+  local unit units_dir="$HOME/.config/systemd/user"
+  mkdir -p "$units_dir/omasync.socket.d"
+  for unit in "${UNITS[@]}"; do
+    ln -sf "$OMASYNC_HOME/systemd/$unit" "$units_dir/$unit"
+  done
+  # Listen on this machine's Tailscale address only, never on the LAN.
+  printf '[Socket]\nListenStream=\nListenStream=%s:%s\n' "$1" "$PORT" >"$units_dir/omasync.socket.d/address.conf"
+  systemctl --user daemon-reload
+}
+
+cmd_setup() {
+  local url=${1:-} ip existing
+  command -v tailscale >/dev/null || die "Tailscale is required: https://tailscale.com/download/linux"
+  ip=$(tailscale ip -4 2>/dev/null | head -n1)
+  [[ -n $ip ]] || die "Tailscale is not up on this machine (tailscale up)"
+
+  if configured; then
+    existing=$(git_data remote get-url origin)
+    [[ -z $url || $(norm_url "$url") == "$(norm_url "$existing")" ]] ||
+      die "already using $existing; run uninstall.sh --purge first to switch"
+  else
+    [[ -n $url ]] || url=$(github_data_repo) ||
+      die "pass the git URL of a (private) repo for your library: omasync setup <url>"
+    echo "Library: $url"
+    clone_data "$url"
+  fi
+  set_identity
+
+  echo "Adding this machine's themes and wallpapers to the library..."
+  library_sync
+  link_units "$ip"
+  systemctl --user enable --now omasync.socket omasync-active.path omasync.timer
+  (( PUSHED )) && broadcast PULL
+  active_hello
+  echo
+  cmd_status
+}
+
+self_update() {
+  local before
+  [[ $AUTO_UPDATE == yes && -d $OMASYNC_HOME/.git ]] || return 0
+  before=$(git -C "$OMASYNC_HOME" rev-parse HEAD)
+  git -C "$OMASYNC_HOME" pull -q --ff-only 2>>"$LOG" || return 0
+  if ! git -C "$OMASYNC_HOME" diff --quiet "$before" HEAD -- systemd; then
+    link_units "$(tailscale ip -4 | head -n1)"
+    systemctl --user restart omasync.socket
+  fi
+}
+
+# Every 5 minutes: catch up on the active theme, push new local themes or
+# wallpapers, and do a full library sync every LIBRARY_INTERVAL_MIN.
+cmd_tick() {
+  if library_due; then
+    self_update
+    library_sync
+  elif library_dirty; then
+    library_sync
+  fi
+  (( ${PUSHED:-0} )) && broadcast PULL
+  active_hello
+}
+
+cmd_status() {
+  local url name missing=() count=0 ip host reply ts origin theme bg mark
+  configured || die "not set up yet: run install.sh"
+  read_active
+  while read -r url; do
+    [[ -n $url ]] || continue
+    count=$((count + 1))
+    name=$(theme_name "$url")
+    [[ -d $THEMES_DIR/$name ]] || missing+=("$name")
+  done <"$LIST"
+
+  printf '%-12s%s\n' Library "$(git_data remote get-url origin)"
+  printf '%-12s%s\n' Themes "$count from git, ${missing[*]:+missing here: }${missing[*]:-all installed}"
+  printf '%-12s%s\n' Wallpapers "$(find "$DATA/backgrounds" -type f ! -name .keep | wc -l) extra"
+  printf '%-12s%s\n' Active "$A_THEME, ${A_BG##*/}"
+  echo
+  echo Machines
+  printf '  %-12s%-20s%-36s%s\n' "$NAME" "$A_THEME" "${A_BG##*/}" "this one"
+  while read -r ip host; do
+    reply=$(send "$ip" GET) || continue
+    IFS=$'\t' read -r ts origin theme bg <<<"$reply"
+    [[ $ts == "$A_TS" ]] && mark="in sync" || mark="out of sync"
+    printf '  %-12s%-20s%-36s%s\n' "$host" "$theme" "${bg##*/}" "$mark"
+  done < <(peers)
+}
+
+cmd_sync() {
+  configured || die "not set up yet: run install.sh"
+  library_sync
+  [[ ${1:-} == --update ]] && update_themes
+  (( PUSHED )) && broadcast PULL
+  echo "Library synced."
+}
+
+case ${1:-} in
+  setup) cmd_setup "${2:-}" ;;
+  status) cmd_status ;;
+  sync) cmd_sync "${2:-}" ;;
+  remove) library_remove "${2:?usage: omasync remove <theme>}" && (( PUSHED )) && broadcast PULL ;;
+  remove-bg) library_remove_bg "${2:?usage: omasync remove-bg <theme>/<file>}" && (( PUSHED )) && broadcast PULL ;;
+  tick) configured && cmd_tick ;;
+  changed) configured && active_changed ;;
+  serve) serve ;;
+  -h | --help | "") sed -n '3,13p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) die "unknown command: $1 (see omasync --help)" ;;
+esac

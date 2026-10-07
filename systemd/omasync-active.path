@@ -1,0 +1,13 @@
+[Unit]
+Description=omasync: watch the active theme and background
+
+[Path]
+# The background is a symlink that gets replaced, which only shows up as a
+# change to the directory, not to the link itself.
+PathChanged=%h/.local/state/omarchy/current/
+PathChanged=%h/.local/state/omarchy/current/theme.name
+TriggerLimitIntervalSec=10
+TriggerLimitBurst=50
+
+[Install]
+WantedBy=default.target
