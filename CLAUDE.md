@@ -73,3 +73,10 @@ Rutas en cada máquina: datos en `~/.local/share/omasync/data`, estado y log en
 stubs de `omarchy-theme-set`, `omarchy-theme-bg-set`, `tailscale`, `systemctl` y `gh`, repos de
 temas locales y socat como listener (con `trap '' TERM HUP`, porque socat mata al hijo al
 cortar; systemd no). Nunca probar contra `~/.config` ni `~/.local` reales.
+
+## Estado
+
+2026-10-07: instalado en el Zenbook y en notro; los dos prototipos antiguos, desinstalados en
+ambos. Prueba real desde el Zenbook: cambio de tema aplicado en notro en ~2.9 s, solo fondo en
+~260 ms, sin rebotes. Gotcha encontrado en notro: `gh` corre vía shim de mise, que imprime un
+aviso en stdout antes de la respuesta; por eso `gh_value` se queda solo con la última línea.
