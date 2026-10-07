@@ -9,7 +9,7 @@ Fusión de dos proyectos anteriores, que se conservan intactos como referencia:
 - `lordyoyi/omarchy-themes`: mismos temas y wallpapers en todos los equipos (vía git).
 - `lordyoyi/omarchy-theme-mirror`: mismo tema activo en vivo (vía Tailscale).
 
-Nació como `omasync` (repo privado `lordyoyi/omasync`, congelado). Al publicarlo apareció
+Nació como `omasync` (repo privado `lordyoyi/omasync`, archivado). Al publicarlo apareció
 `dupontbertrand/omasync`, un plugin de Omarchy parecido (un equipo principal empuja tema, barra,
 Hyprland y plugins por LAN + SSH), y el usuario eligió renombrar a **omasyncro**. El README lo
 menciona en "Similar projects". El protocolo y el puerto no cambiaron con el nombre, así que
@@ -82,7 +82,8 @@ cortar; systemd no). Nunca probar contra `~/.config` ni `~/.local` reales.
 
 ## Estado
 
-2026-10-07: funcionando en el Zenbook y en notro (aún como `omasync`). Prueba real: cambio de
+2026-10-07: omasyncro instalado en el Zenbook y en notro. Los repos antiguos (`omasync`,
+`omarchy-themes`, `omarchy-theme-mirror`) quedaron archivados en GitHub y sin copia local. Prueba real: cambio de
 tema aplicado en el otro equipo en ~2.9 s (Zenbook → notro) y ~3.5 s (notro → Zenbook; el Zenbook
 tarda más en su propio `omarchy theme set`), solo fondo en ~260 ms, sin rebotes.
 
