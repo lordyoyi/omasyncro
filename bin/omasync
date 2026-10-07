@@ -124,6 +124,9 @@ cmd_tick() {
   active_hello
 }
 
+# short <text>: at most 32 characters, for the status table.
+short() { (( ${#1} > 32 )) && echo "${1:0:29}..." || echo "$1"; }
+
 cmd_status() {
   local url name missing=() count=0 ip host reply ts origin theme bg mark
   configured || die "not set up yet: run install.sh"
@@ -141,12 +144,12 @@ cmd_status() {
   printf '%-12s%s\n' Active "$A_THEME, ${A_BG##*/}"
   echo
   echo Machines
-  printf '  %-12s%-20s%-36s%s\n' "$NAME" "$A_THEME" "${A_BG##*/}" "this one"
+  printf '  %-12s%-20s%-34s%s\n' "$NAME" "$A_THEME" "$(short "${A_BG##*/}")" "this one"
   while read -r ip host; do
     reply=$(send "$ip" GET) || continue
     IFS=$'\t' read -r ts origin theme bg <<<"$reply"
     [[ $ts == "$A_TS" ]] && mark="in sync" || mark="out of sync"
-    printf '  %-12s%-20s%-36s%s\n' "$host" "$theme" "${bg##*/}" "$mark"
+    printf '  %-12s%-20s%-34s%s\n' "$host" "$theme" "$(short "${bg##*/}")" "$mark"
   done < <(peers)
 }
 
