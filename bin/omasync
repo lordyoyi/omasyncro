@@ -22,13 +22,21 @@ source "$LIB/peers.sh"
 UNITS=(omasync.socket omasync@.service omasync-active.path omasync-active.service omasync.timer omasync.service)
 DATA_REPO_NAME=omasync-data
 
+# gh's answer, last line only: version managers like mise can print notices
+# on stdout before it.
+gh_value() { gh "$@" 2>/dev/null | tail -n1; }
+
 # Without a URL: reuse <you>/omasync-data on GitHub, creating it if needed.
 github_data_repo() {
+  local url
   command -v gh >/dev/null && gh auth status &>/dev/null || return 1
-  gh repo view "$DATA_REPO_NAME" --json url -q .url 2>/dev/null && return 0
-  gh repo create "$DATA_REPO_NAME" --private \
-    --description "Omarchy themes and wallpapers, synced by omasync" >/dev/null || return 1
-  gh repo view "$DATA_REPO_NAME" --json url -q .url
+  url=$(gh_value repo view "$DATA_REPO_NAME" --json url -q .url)
+  if [[ $url != https://* ]]; then
+    gh repo create "$DATA_REPO_NAME" --private \
+      --description "Omarchy themes and wallpapers, synced by omasync" >/dev/null 2>&1 || return 1
+    url=$(gh_value repo view "$DATA_REPO_NAME" --json url -q .url)
+  fi
+  [[ $url == https://* ]] && echo "$url"
 }
 
 clone_data() {
@@ -51,9 +59,9 @@ clone_data() {
 set_identity() {
   git_data config user.email >/dev/null && return 0
   local login id
-  if command -v gh >/dev/null && login=$(gh api user -q .login 2>/dev/null); then
-    id=$(gh api user -q .id)
-    git_data config user.name "$(gh api user -q '.name // .login')"
+  if command -v gh >/dev/null && login=$(gh_value api user -q .login) && [[ -n $login ]]; then
+    id=$(gh_value api user -q .id)
+    git_data config user.name "$(gh_value api user -q '.name // .login')"
     git_data config user.email "$id+$login@users.noreply.github.com"
   else
     git_data config user.name "omasync"
