@@ -80,14 +80,14 @@ m() {
   shift
   [[ $who == A ]] && other=B || other=A
   env HOME="$T/$who" XDG_RUNTIME_DIR="$T/$who/run" OMARCHY_PATH="$OM" \
-    OMASYNC_NAME="$who" OMASYNC_PEERS="127.0.0.1:${PORTS[$other]}=$other" \
+    OMASYNCRO_NAME="$who" OMASYNCRO_PEERS="127.0.0.1:${PORTS[$other]}=$other" \
     GIT_CONFIG_GLOBAL=/dev/null "$@"
 }
-omasync() { local who=$1; shift; m "$who" "$ROOT/bin/omasync" "$@"; }
+omasyncro() { local who=$1; shift; m "$who" "$ROOT/bin/omasyncro" "$@"; }
 
 listen() {
   m "$1" socat "TCP-LISTEN:${PORTS[$1]},bind=127.0.0.1,fork,reuseaddr" \
-    SYSTEM:"trap '' TERM HUP; exec $ROOT/bin/omasync serve" &>/dev/null &
+    SYSTEM:"trap '' TERM HUP; exec $ROOT/bin/omasyncro serve" &>/dev/null &
   eval "PID_$1=$!"
   PIDS+=($!)
 }
@@ -104,7 +104,7 @@ touch "$T/A/.config/omarchy/backgrounds/alpha/mine one.png"
 
 theme_of() { [[ $(cat "$T/$1/.local/state/omarchy/current/theme.name") == "$2" ]]; }
 bg_of() { [[ $(readlink "$T/$1/.local/state/omarchy/current/background") == *"$2" ]]; }
-origin_of() { [[ $(cut -f2 "$T/$1/.local/state/omasync/active") == "$2" ]]; }
+origin_of() { [[ $(cut -f2 "$T/$1/.local/state/omasyncro/active") == "$2" ]]; }
 
 # --- scenarios ----------------------------------------------------------------
 
@@ -113,44 +113,50 @@ listen B
 sleep 0.3
 
 echo "Setup"
-omasync A setup "file://$T/data.git" >/dev/null
-check "A's theme is in the library" grep -q alpha "$T/A/.local/share/omasync/data/themes.txt"
-check "A's wallpaper is in the library" test -f "$T/A/.local/share/omasync/data/backgrounds/alpha/mine one.png"
-omasync B setup "file://$T/data.git" >/dev/null
+omasyncro A setup "file://$T/data.git" >/dev/null
+check "A's theme is in the library" grep -q alpha "$T/A/.local/share/omasyncro/data/themes.txt"
+check "A's wallpaper is in the library" test -f "$T/A/.local/share/omasyncro/data/backgrounds/alpha/mine one.png"
+omasyncro B setup "file://$T/data.git" >/dev/null
 check "B installed A's theme" test -d "$T/B/.config/omarchy/themes/alpha/.git"
 check "B got A's wallpaper" test -f "$T/B/.config/omarchy/backgrounds/alpha/mine one.png"
 check "A installed B's theme after B's PULL" test -d "$T/A/.config/omarchy/themes/beta/.git"
 
 echo "Active theme"
 m A "$OM/bin/omarchy-theme-set" alpha
-omasync A changed
+omasyncro A changed
 check "B follows A to alpha" theme_of B alpha
-omasync B changed # B's own watcher firing after the apply
+omasyncro B changed # B's own watcher firing after the apply
 check "no echo back from B" origin_of A A
 
 m B "$OM/bin/omarchy-theme-bg-set" "$T/B/.config/omarchy/backgrounds/alpha/mine one.png"
-omasync B changed
+omasyncro B changed
 check "A follows B's background change" bg_of A "alpha/mine one.png"
 
 echo "New wallpaper set active right away"
 touch "$T/A/.config/omarchy/backgrounds/alpha/fresh.png"
 m A "$OM/bin/omarchy-theme-bg-set" "$T/A/.config/omarchy/backgrounds/alpha/fresh.png"
-omasync A changed
+omasyncro A changed
 check "B got the new file" test -f "$T/B/.config/omarchy/backgrounds/alpha/fresh.png"
 check "B shows it" bg_of B "alpha/fresh.png"
 
 echo "Wallpaper only on one machine"
 touch "$T/B/only-b.png"
 m B "$OM/bin/omarchy-theme-bg-set" "$T/B/only-b.png"
-omasync B changed
+omasyncro B changed
 sleep 1
 check "A keeps its background" bg_of A "alpha/fresh.png"
-omasync A changed
+omasyncro A changed
 check "A keeps B's state instead of pushing its fallback" origin_of A B
 check "B's state still comes from B" origin_of B B
 
+echo "A peer cannot point the background outside Omarchy's folders"
+touch "$T/A/secret.png"
+printf 'SET\t%s\tB\talpha\t~/secret.png\n' "$(($(date +%s%3N) + 1000))" | m A "$ROOT/bin/omasyncro" serve >/dev/null
+bg_of A "secret.png" && fail "A refused ~/secret.png" || pass "A refused ~/secret.png"
+check "A logged the refusal" grep -q "outside Omarchy's folders" "$T/A/.local/state/omasyncro/log"
+
 echo "Remove everywhere"
-omasync A remove beta >/dev/null
+omasyncro A remove beta >/dev/null
 check "beta gone on A" test ! -e "$T/A/.config/omarchy/themes/beta"
 check "beta gone on B" test ! -e "$T/B/.config/omarchy/themes/beta"
 
@@ -158,20 +164,20 @@ echo "Peer offline, then catches up"
 kill "$PID_B"
 sleep 0.2
 m A "$OM/bin/omarchy-theme-set" tokyo-night
-omasync A changed
+omasyncro A changed
 theme_of B alpha && pass "B still on alpha while offline" || fail "B still on alpha while offline"
 listen B
 sleep 0.3
-omasync B tick
+omasyncro B tick
 check "B caught up on tick" theme_of B tokyo-night
 
 echo "New wallpaper dropped in a folder, picked up by tick"
 touch "$T/B/.config/omarchy/backgrounds/alpha/dropped.png"
-omasync B tick
+omasyncro B tick
 check "A got the dropped wallpaper" test -f "$T/A/.config/omarchy/backgrounds/alpha/dropped.png"
 
 echo "Status"
-omasync A status | sed 's/^/  | /'
+omasyncro A status | sed 's/^/  | /'
 
 echo
 if ((FAILS)); then

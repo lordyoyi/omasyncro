@@ -7,11 +7,11 @@
 #   PULL             -> OK, then a library sync
 
 # Prints "<ip> <hostname>" for each online Linux peer. Tests and unusual setups
-# can set OMASYNC_PEERS="ip:port[=name] ...".
+# can set OMASYNCRO_PEERS="ip:port[=name] ...".
 peers() {
-  if [[ -n ${OMASYNC_PEERS:-} ]]; then
+  if [[ -n ${OMASYNCRO_PEERS:-} ]]; then
     local p
-    for p in $OMASYNC_PEERS; do echo "${p%%=*} ${p#*=}"; done
+    for p in $OMASYNCRO_PEERS; do echo "${p%%=*} ${p#*=}"; done
     return
   fi
   tailscale status --json 2>/dev/null | jq -r '
@@ -27,7 +27,7 @@ send() {
     _ "$1" "$2" 2>/dev/null
 }
 
-# Sends a line to every peer at once. Peers without omasync just refuse.
+# Sends a line to every peer at once. Peers without omasyncro just refuse.
 broadcast() {
   local ip host
   while read -r ip host; do

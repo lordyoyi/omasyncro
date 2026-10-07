@@ -38,10 +38,27 @@ needs_library_for() {
   [[ $bg == "~/.config/omarchy/backgrounds/"* && ! -f $DATA/backgrounds/${bg#"~/.config/omarchy/backgrounds/"} ]]
 }
 
+# A background a peer may ask for: an image inside Omarchy's background or
+# theme folders, nowhere else on the machine.
+allowed_bg() {
+  local path=$1
+  [[ $path != *..* ]] || return 1
+  [[ ${path,,} =~ \.(jpe?g|png|gif|bmp|webp)$ ]] || return 1
+  case $path in
+    "$BG_DIR"/* | "$THEMES_DIR"/* | "$CURRENT/theme/backgrounds/"* | "$OMARCHY_PATH/themes/"*) return 0 ;;
+  esac
+  return 1
+}
+
 # Applies a remote state; called with the active lock held. Every Omarchy
 # command gets fds 7 and 8 closed so whatever it leaves behind can't hold them.
 apply_active() {
   local theme=$1 bg=$2 path=${2/#\~/$HOME}
+
+  if [[ -n $bg ]] && ! allowed_bg "$path"; then
+    log "ignored background outside Omarchy's folders: $bg"
+    bg="" path=""
+  fi
 
   if ! theme_available "$theme" || [[ -n $bg && ! -f $path ]]; then
     library_sync

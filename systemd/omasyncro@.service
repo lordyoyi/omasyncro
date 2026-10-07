@@ -1,8 +1,8 @@
 [Unit]
-Description=omasync: message from another Omarchy machine
+Description=omasyncro: message from another Omarchy machine
 
 [Service]
-ExecStart=%h/.local/bin/omasync serve
+ExecStart=%h/.local/bin/omasyncro serve
 StandardInput=socket
 StandardOutput=socket
 StandardError=journal

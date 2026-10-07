@@ -1,0 +1,7 @@
+[Unit]
+Description=omasyncro: catch up with other machines
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/omasyncro tick

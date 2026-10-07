@@ -1,0 +1,33 @@
+name: Something is broken
+description: Themes, wallpapers or the active theme don't sync the way they should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        If it is a security vulnerability, do not file it here. Use private reporting:
+        https://github.com/lordyoyi/omasyncro/security/advisories/new
+  - type: textarea
+    id: what
+    attributes:
+      label: What happens, and what you expected instead
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: "`omasyncro status` on the machines involved"
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: The end of the log on the machine that misbehaves
+      description: "`tail -n 40 ~/.local/state/omasyncro/log`"
+      render: text
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: "`omarchy version` and `git -C ~/.local/share/omasyncro/app rev-parse --short HEAD`"

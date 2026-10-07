@@ -1,5 +1,5 @@
 [Unit]
-Description=omasync: watch the active theme and background
+Description=omasyncro: watch the active theme and background
 
 [Path]
 # The background is a symlink that gets replaced, which only shows up as a

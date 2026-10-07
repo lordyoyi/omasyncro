@@ -1,13 +1,19 @@
-# omasync: contexto para Claude Code
+# omasyncro: contexto para Claude Code
 
 Fuente de verdad del proyecto. Léelo antes de cambiar nada. El uso está en `README.md`
-(en inglés, porque la idea es compartirlo con otros usuarios de Omarchy).
+(en inglés). **Público** en https://github.com/lordyoyi/omasyncro (MIT) desde el 2026-10-07.
 
 ## Qué es
 
 Fusión de dos proyectos anteriores, que se conservan intactos como referencia:
 - `lordyoyi/omarchy-themes`: mismos temas y wallpapers en todos los equipos (vía git).
 - `lordyoyi/omarchy-theme-mirror`: mismo tema activo en vivo (vía Tailscale).
+
+Nació como `omasync` (repo privado `lordyoyi/omasync`, congelado). Al publicarlo apareció
+`dupontbertrand/omasync`, un plugin de Omarchy parecido (un equipo principal empuja tema, barra,
+Hyprland y plugins por LAN + SSH), y el usuario eligió renombrar a **omasyncro**. El README lo
+menciona en "Similar projects". El protocolo y el puerto no cambiaron con el nombre, así que
+omasync y omasyncro se entienden entre sí.
 
 Pedido del usuario (2026-10-07): un repo nuevo, **código separado de los datos**, genérico y
 limpio para que otros usuarios de Omarchy lo instalen. Al instalar, la app ve lo que la máquina
@@ -17,29 +23,29 @@ tiene y lo mantiene. Ajustarlo con cada cambio de Omarchy está aceptado.
 
 | Máquina | Tailscale | Notas |
 |---|---|---|
-| Zenbook | `omarchy` | Laptop, se suspende. Código en `~/Dev/omasync`. |
+| Zenbook | `omarchy` | Laptop, se suspende. Código en `~/Dev/omasyncro`. |
 | notro | `notro` | Mini PC 24/7, sesión abierta. Sin SSH desde el Zenbook: los pasos para notro van en un `.md` en `~/Dropbox/01 - Proyectos/`. |
-| hex | `hex` | Linux en la misma tailnet, sin omasync. Aparece en la detección y no responde; es normal. |
+| hex | `hex` | Linux en la misma tailnet, sin omasyncro. Aparece en la detección y no responde; es normal. |
 
-Datos del usuario: `lordyoyi/omasync-data` (privado). Config: `AUTO_UPDATE=yes`.
+Datos del usuario: `lordyoyi/omasyncro-data` (privado, antes `omasync-data`; GitHub redirige). Config: `AUTO_UPDATE=yes`.
 
 ## Estructura
 
-- `bin/omasync`: comandos (`setup`, `status`, `sync`, `remove`, `remove-bg`) y los internos
+- `bin/omasyncro`: comandos (`setup`, `status`, `sync`, `remove`, `remove-bg`) y los internos
   (`tick`, `changed`, `serve`).
-- `lib/common.sh`: rutas, config (`~/.config/omasync/config`), log, locks.
+- `lib/common.sh`: rutas, config (`~/.config/omasyncro/config`), log, locks.
 - `lib/library.sh`: biblioteca (temas + wallpapers) contra el repo de datos. Portado de
   `omarchy-themes-sync` casi sin cambios de lógica.
 - `lib/active.sh`: tema activo. Portado de `omarchy-theme-mirror`.
 - `lib/peers.sh`: detección de peers, `send`, `broadcast`, `serve`.
-- `systemd/`: `omasync.socket` + `omasync@.service` (recibir), `omasync-active.path/.service`
-  (vigilar el tema activo), `omasync.timer/.service` (tick cada 5 min).
-- `install.sh` enlaza `omasync` en `~/.local/bin` y corre `omasync setup`. `uninstall.sh`.
+- `systemd/`: `omasyncro.socket` + `omasyncro@.service` (recibir), `omasyncro-active.path/.service`
+  (vigilar el tema activo), `omasyncro.timer/.service` (tick cada 5 min).
+- `install.sh` enlaza `omasyncro` en `~/.local/bin` y corre `omasyncro setup`. `uninstall.sh`.
 - `test/run.sh`: prueba de punta a punta con dos máquinas simuladas. **Correrla después de
   cualquier cambio.**
 
-Rutas en cada máquina: datos en `~/.local/share/omasync/data`, estado y log en
-`~/.local/state/omasync/`.
+Rutas en cada máquina: datos en `~/.local/share/omasyncro/data`, estado y log en
+`~/.local/state/omasyncro/`.
 
 ## Decisiones (no cambiar sin hablarlo)
 
@@ -52,7 +58,7 @@ Rutas en cada máquina: datos en `~/.local/share/omasync/data`, estado y log en
 - **Sin regla de ufw ni sudo:** Tailscale acepta el tráfico de `tailscale0` antes que ufw
   (notro respondió "connection refused" sin regla, no timeout). Si alguien corre Tailscale
   con `--netfilter-mode=off`, tendría que abrir el puerto a mano.
-- **Repo de datos sin URL:** `setup` usa `gh` para encontrar o crear `<usuario>/omasync-data`.
+- **Repo de datos sin URL:** `setup` usa `gh` para encontrar o crear `<usuario>/omasyncro-data`.
   Con URL, cualquier host git.
 - **La biblioteca solo agrega**; `remove`/`remove-bg` dejan tombstones. Reinstalar revive. El
   tema activo nunca se borra solo.
@@ -76,7 +82,13 @@ cortar; systemd no). Nunca probar contra `~/.config` ni `~/.local` reales.
 
 ## Estado
 
-2026-10-07: instalado en el Zenbook y en notro; los dos prototipos antiguos, desinstalados en
-ambos. Prueba real desde el Zenbook: cambio de tema aplicado en notro en ~2.9 s, solo fondo en
-~260 ms, sin rebotes. Gotcha encontrado en notro: `gh` corre vía shim de mise, que imprime un
-aviso en stdout antes de la respuesta; por eso `gh_value` se queda solo con la última línea.
+2026-10-07: funcionando en el Zenbook y en notro (aún como `omasync`). Prueba real: cambio de
+tema aplicado en el otro equipo en ~2.9 s (Zenbook → notro) y ~3.5 s (notro → Zenbook; el Zenbook
+tarda más en su propio `omarchy theme set`), solo fondo en ~260 ms, sin rebotes.
+
+Al publicar se agregó: fondos pedidos por un peer limitados a imágenes en las carpetas de fondos
+y temas de Omarchy (`allowed_bg`), `status` consulta a los peers en paralelo, y `uninstall.sh
+--purge` ya no borra la carpeta del programa. 20 pruebas en `test/run.sh`.
+
+Gotcha de notro: `gh` corre vía shim de mise, que imprime un aviso en stdout antes de la
+respuesta; por eso `gh_value` se queda solo con la última línea.

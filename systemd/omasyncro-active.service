@@ -1,0 +1,6 @@
+[Unit]
+Description=omasyncro: tell other machines about a theme change
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/omasyncro changed

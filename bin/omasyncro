@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# omasync: keep every Omarchy machine on your tailnet with the same themes,
+# omasyncro: keep every Omarchy machine on your tailnet with the same themes,
 # wallpapers and active theme.
 #
-#   omasync setup [<data-repo-url>]   set up this machine (install.sh runs it)
-#   omasync status                    library, active theme and peers
-#   omasync sync [--update]           sync the library now (--update: git pull every theme)
-#   omasync remove <theme>            uninstall a theme on every machine
-#   omasync remove-bg <theme>/<file>  delete a wallpaper on every machine
+#   omasyncro setup [<data-repo-url>]   set up this machine (install.sh runs it)
+#   omasyncro status                    library, active theme and peers
+#   omasyncro sync [--update]           sync the library now (--update: git pull every theme)
+#   omasyncro remove <theme>            uninstall a theme on every machine
+#   omasyncro remove-bg <theme>/<file>  delete a wallpaper on every machine
 #
 # Internal, run by systemd: tick, changed, serve.
 
@@ -19,21 +19,21 @@ source "$LIB/library.sh"
 source "$LIB/active.sh"
 source "$LIB/peers.sh"
 
-UNITS=(omasync.socket omasync@.service omasync-active.path omasync-active.service omasync.timer omasync.service)
-DATA_REPO_NAME=omasync-data
+UNITS=(omasyncro.socket omasyncro@.service omasyncro-active.path omasyncro-active.service omasyncro.timer omasyncro.service)
+DATA_REPO_NAME=omasyncro-data
 
 # gh's answer, last line only: version managers like mise can print notices
 # on stdout before it.
 gh_value() { gh "$@" 2>/dev/null | tail -n1; }
 
-# Without a URL: reuse <you>/omasync-data on GitHub, creating it if needed.
+# Without a URL: reuse <you>/omasyncro-data on GitHub, creating it if needed.
 github_data_repo() {
   local url
   command -v gh >/dev/null && gh auth status &>/dev/null || return 1
   url=$(gh_value repo view "$DATA_REPO_NAME" --json url -q .url)
   if [[ $url != https://* ]]; then
     gh repo create "$DATA_REPO_NAME" --private \
-      --description "Omarchy themes and wallpapers, synced by omasync" >/dev/null 2>&1 || return 1
+      --description "Omarchy themes and wallpapers, synced by omasyncro" >/dev/null 2>&1 || return 1
     url=$(gh_value repo view "$DATA_REPO_NAME" --json url -q .url)
   fi
   [[ $url == https://* ]] && echo "$url"
@@ -47,7 +47,7 @@ clone_data() {
   mkdir -p "$DATA/backgrounds"
   touch "$DATA/themes.txt" "$DATA/removed.txt" "$DATA/backgrounds/.keep"
   printf 'themes.txt merge=union\nremoved.txt merge=union\n' >"$DATA/.gitattributes"
-  printf '# Omarchy library\n\nData for [omasync](https://github.com/lordyoyi/omasync). Edited by the tool; no need to touch it by hand.\n' >"$DATA/README.md"
+  printf '# Omarchy library\n\nData for [omasyncro](https://github.com/lordyoyi/omasyncro). Edited by the tool; no need to touch it by hand.\n' >"$DATA/README.md"
   git_data checkout -q -b main 2>/dev/null
   set_identity
   git_data add -A && git_data commit -q -m "Start the library" && git_data push -q -u origin main ||
@@ -64,19 +64,19 @@ set_identity() {
     git_data config user.name "$(gh_value api user -q '.name // .login')"
     git_data config user.email "$id+$login@users.noreply.github.com"
   else
-    git_data config user.name "omasync"
-    git_data config user.email "omasync@$NAME"
+    git_data config user.name "omasyncro"
+    git_data config user.email "omasyncro@$NAME"
   fi
 }
 
 link_units() {
   local unit units_dir="$HOME/.config/systemd/user"
-  mkdir -p "$units_dir/omasync.socket.d"
+  mkdir -p "$units_dir/omasyncro.socket.d"
   for unit in "${UNITS[@]}"; do
-    ln -sf "$OMASYNC_HOME/systemd/$unit" "$units_dir/$unit"
+    ln -sf "$OMASYNCRO_HOME/systemd/$unit" "$units_dir/$unit"
   done
   # Listen on this machine's Tailscale address only, never on the LAN.
-  printf '[Socket]\nListenStream=\nListenStream=%s:%s\n' "$1" "$PORT" >"$units_dir/omasync.socket.d/address.conf"
+  printf '[Socket]\nListenStream=\nListenStream=%s:%s\n' "$1" "$PORT" >"$units_dir/omasyncro.socket.d/address.conf"
   systemctl --user daemon-reload
 }
 
@@ -92,7 +92,7 @@ cmd_setup() {
       die "already using $existing; run uninstall.sh --purge first to switch"
   else
     [[ -n $url ]] || url=$(github_data_repo) ||
-      die "pass the git URL of a (private) repo for your library: omasync setup <url>"
+      die "pass the git URL of a (private) repo for your library: omasyncro setup <url>"
     echo "Library: $url"
     clone_data "$url"
   fi
@@ -101,7 +101,7 @@ cmd_setup() {
   echo "Adding this machine's themes and wallpapers to the library..."
   library_sync
   link_units "$ip"
-  systemctl --user enable --now omasync.socket omasync-active.path omasync.timer
+  systemctl --user enable --now omasyncro.socket omasyncro-active.path omasyncro.timer
   (( PUSHED )) && broadcast PULL
   active_hello
   echo
@@ -110,12 +110,12 @@ cmd_setup() {
 
 self_update() {
   local before
-  [[ $AUTO_UPDATE == yes && -d $OMASYNC_HOME/.git ]] || return 0
-  before=$(git -C "$OMASYNC_HOME" rev-parse HEAD)
-  git -C "$OMASYNC_HOME" pull -q --ff-only 2>>"$LOG" || return 0
-  if ! git -C "$OMASYNC_HOME" diff --quiet "$before" HEAD -- systemd; then
+  [[ $AUTO_UPDATE == yes && -d $OMASYNCRO_HOME/.git ]] || return 0
+  before=$(git -C "$OMASYNCRO_HOME" rev-parse HEAD)
+  git -C "$OMASYNCRO_HOME" pull -q --ff-only 2>>"$LOG" || return 0
+  if ! git -C "$OMASYNCRO_HOME" diff --quiet "$before" HEAD -- systemd; then
     link_units "$(tailscale ip -4 | head -n1)"
-    systemctl --user restart omasync.socket
+    systemctl --user restart omasyncro.socket
   fi
 }
 
@@ -153,12 +153,21 @@ cmd_status() {
   echo
   echo Machines
   printf '  %-12s%-20s%-34s%s\n' "$NAME" "$A_THEME" "$(short "${A_BG##*/}")" "this one"
+  # Ask every peer at once; a machine that drops the connection costs 3 s, not 3 s each.
+  local tmp
+  tmp=$(mktemp -d)
   while read -r ip host; do
-    reply=$(send "$ip" GET) || continue
-    IFS=$'\t' read -r ts origin theme bg <<<"$reply"
+    send "$ip" GET >"$tmp/$host" &
+  done < <(peers)
+  wait
+  for reply in "$tmp"/*; do
+    [[ -s $reply ]] || continue
+    host=${reply##*/}
+    IFS=$'\t' read -r ts origin theme bg <"$reply"
     [[ $ts == "$A_TS" ]] && mark="in sync" || mark="out of sync"
     printf '  %-12s%-20s%-34s%s\n' "$host" "$theme" "$(short "${bg##*/}")" "$mark"
-  done < <(peers)
+  done
+  rm -rf "$tmp"
 }
 
 cmd_sync() {
@@ -173,11 +182,11 @@ case ${1:-} in
   setup) cmd_setup "${2:-}" ;;
   status) cmd_status ;;
   sync) cmd_sync "${2:-}" ;;
-  remove) library_remove "${2:?usage: omasync remove <theme>}" && (( PUSHED )) && broadcast PULL ;;
-  remove-bg) library_remove_bg "${2:?usage: omasync remove-bg <theme>/<file>}" && (( PUSHED )) && broadcast PULL ;;
+  remove) library_remove "${2:?usage: omasyncro remove <theme>}" && (( PUSHED )) && broadcast PULL ;;
+  remove-bg) library_remove_bg "${2:?usage: omasyncro remove-bg <theme>/<file>}" && (( PUSHED )) && broadcast PULL ;;
   tick) configured && cmd_tick ;;
   changed) configured && active_changed ;;
   serve) serve ;;
   -h | --help | "") sed -n '3,13p' "$0" | sed 's/^# \{0,1\}//' ;;
-  *) die "unknown command: $1 (see omasync --help)" ;;
+  *) die "unknown command: $1 (see omasyncro --help)" ;;
 esac
