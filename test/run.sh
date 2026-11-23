@@ -52,6 +52,7 @@ cat >"$OM/bin/omarchy-theme-bg-set" <<'EOF'
 #!/bin/bash
 ln -nsf "$(realpath "$1")" "$HOME/.local/state/omarchy/current/background"
 EOF
+printf '#!/bin/bash\necho "$*" >>"$HOME/shell.log"\n' >"$OM/bin/omarchy-shell"
 printf '#!/bin/bash\necho 127.0.0.1\n' >"$OM/bin/tailscale"
 printf '#!/bin/bash\nexit 0\n' >"$OM/bin/systemctl"
 printf '#!/bin/bash\nexit 1\n' >"$OM/bin/gh"
@@ -80,7 +81,7 @@ m() {
   shift
   [[ $who == A ]] && other=B || other=A
   env HOME="$T/$who" XDG_RUNTIME_DIR="$T/$who/run" OMARCHY_PATH="$OM" \
-    OMASYNCRO_NAME="$who" OMASYNCRO_PEERS="127.0.0.1:${PORTS[$other]}=$other" \
+    OMASYNCRO_NAME="$who" OMASYNCRO_SETTLE_S=0 OMASYNCRO_PEERS="127.0.0.1:${PORTS[$other]}=$other" \
     GIT_CONFIG_GLOBAL=/dev/null "$@"
 }
 omasyncro() { local who=$1; shift; m "$who" "$ROOT/bin/omasyncro" "$@"; }
@@ -125,6 +126,7 @@ echo "Active theme"
 m A "$OM/bin/omarchy-theme-set" alpha
 omasyncro A changed
 check "B follows A to alpha" theme_of B alpha
+check "B's shell is handed alpha's background" grep -q "setInstant $T/B/.local/state/omarchy/current/theme/backgrounds/a.png" "$T/B/shell.log"
 omasyncro B changed # B's own watcher firing after the apply
 check "no echo back from B" origin_of A A
 

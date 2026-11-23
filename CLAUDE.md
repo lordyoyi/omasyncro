@@ -91,5 +91,14 @@ Al publicar se agregó: fondos pedidos por un peer limitados a imágenes en las 
 y temas de Omarchy (`allowed_bg`), `status` consulta a los peers en paralelo, y `uninstall.sh
 --purge` ya no borra la carpeta del programa. 20 pruebas en `test/run.sh`.
 
+2026-11-22: al cambiar de tema muchas veces seguidas en el Zenbook, notro quedó en nord con los
+colores bien y el fondo viejo en pantalla, aunque el link `current/background` ya apuntaba al
+nuevo. Causa (en Omarchy, `Background.qml`): `themeTransition` espera que cargue un snapshot que
+`omarchy-theme-set` borra a los 3 s; si no carga, el reveal nunca parte, los colores entran igual
+por el timer de 300 ms y nadie reintenta. `apply_active` comparaba solo el link y no hacía nada.
+Arreglo: `settle_bg` en `active_offer`, fuera del lock: espera 3 s (`OMASYNCRO_SETTLE_S`) y, si
+no llegó un estado más nuevo, manda `omarchy-shell background setInstant <fondo>` (lo mismo que
+hace Omarchy tras un intro). Sin logs de notro, la causa exacta quedó deducida, no observada.
+
 Gotcha de notro: `gh` corre vía shim de mise, que imprime un aviso en stdout antes de la
 respuesta; por eso `gh_value` se queda solo con la última línea.

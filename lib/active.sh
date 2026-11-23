@@ -81,9 +81,25 @@ apply_active() {
   fi
 }
 
+# omarchy-theme-set can leave the old wallpaper on screen when switches come
+# back to back: the shell's reveal waits on a frame that never loads and
+# nothing retries, while the link already names the new background, so
+# apply_active sees nothing left to do. Once the transition has had its time,
+# and unless a newer state replaced this one, hand the shell the background
+# again. Videos belong to OWE and are left alone.
+settle_bg() {
+  local ts=$1 bg
+  sleep "${OMASYNCRO_SETTLE_S:-3}"
+  read_active
+  (( A_TS == ts )) || return 0
+  bg=$(readlink -f "$CURRENT/background" 2>/dev/null) || return 0
+  [[ -f $bg && ${bg,,} =~ \.(jpe?g|png|gif|bmp|webp)$ ]] || return 0
+  timeout 2 omarchy-shell background setInstant "$bg" 7>&- 8>&- >/dev/null 2>&1 || true
+}
+
 # offer <ms> <origin> <theme> <bg>: take a peer's state if it is newer.
 active_offer() {
-  local ts=$1 origin=$2 theme=$3 bg=$4
+  local ts=$1 origin=$2 theme=$3 bg=$4 applied=0
   [[ $ts =~ ^[0-9]+$ ]] && valid_name "$theme" && [[ $bg != *$'\n'* ]] || {
     log "ignored malformed state from $origin"
     return
@@ -97,8 +113,11 @@ active_offer() {
     # was missing here, the watcher sees no local change and does not push this
     # machine's fallback back over the peer's choice.
     write_active "$ts" "$origin" "$(current_theme)" "$(local_bg)"
+    applied=1
   fi
   unlock_active
+  (( applied )) && settle_bg "$ts"
+  return 0
 }
 
 # The watcher fired: if the theme or background changed here, tell the peers.
